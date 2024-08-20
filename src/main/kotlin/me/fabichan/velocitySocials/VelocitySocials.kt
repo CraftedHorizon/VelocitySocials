@@ -1,7 +1,6 @@
 package me.fabichan.velocitySocials
 
 import com.google.inject.Inject
-import com.velocitypowered.api.command.CommandSource
 import com.velocitypowered.api.command.SimpleCommand
 import com.velocitypowered.api.event.Subscribe
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent
@@ -31,8 +30,17 @@ class VelocitySocials @Inject constructor(
     @com.velocitypowered.api.plugin.annotation.DataDirectory private val dataDirectory: Path
 ) {
 
+    private lateinit var commands: Map<String, Map<String, String>>
+
     @Subscribe
     fun onProxyInitialization(event: ProxyInitializeEvent) {
+        loadConfig()
+        registerCommands()
+        server.commandManager.register("vs", ReloadCommand())
+        logger.info("VelocitySocials Plugin wurde aktiviert!")
+    }
+
+    private fun loadConfig() {
         try {
             val configPath = dataDirectory.resolve("config.yml")
 
@@ -48,28 +56,34 @@ class VelocitySocials @Inject constructor(
             }
 
             val yaml = Yaml()
-            val config = Files.newBufferedReader(configPath).use { reader ->
-                yaml.load<Map<String, Any>>(reader)
+            commands = Files.newBufferedReader(configPath).use { reader ->
+                yaml.load<Map<String, Any>>(reader)["commands"] as? Map<String, Map<String, String>>
+                    ?: emptyMap()
             }
 
-            val commands = config["commands"] as? Map<String, Map<String, String>>
-            commands?.forEach { (key, value) ->
-                val commandName = value["commandname"]
-                val response = value["response"]
-
-                if (commandName != null && response != null) {
-                    server.commandManager.register(commandName, SocialCommand(response))
-                    logger.info("Befehl /$commandName wurde registriert.")
-                } else {
-                    logger.warn("Ungültige Befehlskonfiguration für $key")
-                }
-            }
+            logger.info("Konfiguration erfolgreich geladen.")
 
         } catch (e: Exception) {
             logger.error("Fehler beim Laden der Konfiguration", e)
         }
+    }
 
-        logger.info("VelocitySocials Plugin wurde aktiviert!")
+    private fun registerCommands() {
+        commands.forEach { (key, value) ->
+            val commandName = value["commandname"]
+            val response = value["response"]
+
+            if (commandName != null && response != null) {
+                server.commandManager.register(commandName, SocialCommand(response))
+                logger.info("Befehl /$commandName wurde registriert.")
+            } else {
+                logger.warn("Ungültige Befehlskonfiguration für $key")
+            }
+        }
+    }
+    
+    private fun unregisterCommands() {
+        commands.keys.forEach { server.commandManager.unregister(it) }
     }
 
     inner class SocialCommand(private val response: String) : SimpleCommand {
@@ -90,7 +104,7 @@ class VelocitySocials @Inject constructor(
                         .color(NamedTextColor.AQUA)
                         .decorate(TextDecoration.UNDERLINED)
                         .clickEvent(ClickEvent.openUrl(word))
-                        .hoverEvent(HoverEvent.showText(Component.text("Click to open link")))
+                        .hoverEvent(HoverEvent.showText(Component.text("Klicke, um den Link zu öffnen.")))
                     message.append(link).append(Component.space())
                 } else {
                     message.append(Component.text(word)).append(Component.space())
@@ -102,6 +116,20 @@ class VelocitySocials @Inject constructor(
 
         override fun hasPermission(invocation: SimpleCommand.Invocation): Boolean {
             return true
+        }
+    }
+
+    inner class ReloadCommand : SimpleCommand {
+        override fun execute(invocation: SimpleCommand.Invocation) {
+            val source = invocation.source()
+            loadConfig()
+            unregisterCommands()
+            registerCommands()
+            source.sendMessage(Component.text("Konfiguration erfolgreich neu geladen!").color(NamedTextColor.GREEN))
+        }
+
+        override fun hasPermission(invocation: SimpleCommand.Invocation): Boolean {
+            return invocation.source().hasPermission("velocitysocials.reload")
         }
     }
 }
