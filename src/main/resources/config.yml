@@ -1,0 +1,14 @@
+commands:
+  discord:
+    commandname: discord
+    response: "Join our Discord server: https://discord.gg/yourinvite"
+  website:
+    commandname: website
+    response: "Visit our website: https://www.example.com"
+  rules:
+    commandname: rules
+    response: |
+      Please follow the server rules:
+      1. Be respectful.
+      2. No spamming.
+      3. No cheating.
